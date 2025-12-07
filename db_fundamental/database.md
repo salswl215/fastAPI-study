@@ -66,3 +66,7 @@
 - 빈번한 OLTP 성 작업의 요청마다(초당 수십건) DB Connection을 생성하고 종료하는 작업은 많은 자원을 소모하여 안정적인 DB 운영에 큰 영향을 미칠 수 있음
 - 일정 수의 Connection을 미리 Pool에서 생성하고, 이를 가져다 sql을 수행 후 Connection을 종료시키지 않고 다시 Pool에 반환하는 기법이 Connection Pooling
 
+- 주요 파라미터
+    - pool_size : Pool 에서 유지되는 connection 개수
+    - max_overflow : pool_size를 넘어서 추가 connection이 필요할 경우 허용할 개수
+    - pool_recycle : Connection이 pool내에서 유지되는 시간(초).해당 시간이 넘어가면 접속 시 새로운 Connection Pool로 생성. 기본은 -1이며 이 경우 계속 Pool내에서 유지됨
