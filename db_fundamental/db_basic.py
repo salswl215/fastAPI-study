@@ -1,9 +1,10 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import SQLAlchemyError
+from db_config import get_database_url
 
 # database connection URL
-DATABASE_CONN = "mysql+mysqlconnector://root:alswl0215!@localhost:3306/blog_db"
+DATABASE_CONN = get_database_url()
 
 # Engine 생성
 engine = create_engine(DATABASE_CONN, pool_size = 10, max_overflow = 0)
