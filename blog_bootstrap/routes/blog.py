@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request, Depends, Form, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, status
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.templating import Jinja2Templates
 from db.database import direct_get_conn, context_get_conn
@@ -49,9 +49,22 @@ def create_blog(request: Request
                 , title = Form(min_length=2, max_length=200)
                 , author = Form(max_length=100)
                 , content = Form(min_length=2, max_length=4000)
+                , imagefile: UploadFile = File(None)
                 , conn: Connection = Depends(context_get_conn)):
-    
-    blog_svc.create_blog(conn, title=title, author=author, content=content)
+    # UploadFile 갹체: 1MB 이하는 메모리로 임시로 가지고 있고, 이상인 경우 OS Temp에 임시로 가지고 있음
+    # 속성 : filename(파일명) / cotent_type: MIME/미디어 타입(image/jpeg 등) / file : 파이썬의 SpooledTemporaryFile 객체. 
+    #       OS의 임시 디렉토리에 동기방식으로 파일을 Upload 할 시에는 해당 객체의 file.read() 호출
+    # 메소드(비동기 i/o 수행. async > await 호출) : read(size)  / write(data)
+    # print("#### filename: ", imagefile.filename)
+    image_loc = None
+    if len(imagefile.filename.strip()) > 0:
+        image_loc = blog_svc.upload_file(author=author, imagefile = imagefile)
+        blog_svc.create_blog(conn, title=title, author=author, 
+                            content=content, image_loc = image_loc)
+    else:
+        blog_svc.create_blog(conn, title=title, author=author, 
+                            content=content, image_loc = image_loc)
+
     return RedirectResponse("/blogs", status_code = status.HTTP_302_FOUND)
 
 
@@ -70,13 +83,27 @@ def update_blog(request: Request, id: int
                 , title = Form(min_length=2, max_length=200)
                 , author = Form(max_length=100)
                 , content = Form(min_length=2, max_length=4000)
+                , imagefile: UploadFile | None = File(None)
                 , conn: Connection = Depends(context_get_conn)):
-    blog_svc.update_blog(conn=conn, id = id, title=title, author=author, content=content)
+    
+    image_loc = None
+    if len(imagefile.filename.strip()) > 0:
+        image_loc = blog_svc.upload_file(author=author, imagefile=imagefile)
+        print(f"###{image_loc}###")
+        blog_svc.update_blog(conn=conn, id=id, title=title, author=author, 
+                            content=content, image_loc=image_loc)
+    else:
+        blog_svc.update_blog(conn=conn, id=id, title=title, author=author, 
+                            content=content, image_loc=image_loc)
+    
     return RedirectResponse(f"/blogs/show/{id}", status_code=status.HTTP_302_FOUND)
 
-@router.post("/delete/{id}")
+@router.delete("/delete/{id}")
 def delete_blog(request: Request, id: int
                 , conn: Connection = Depends(context_get_conn)):
-    blog_svc.delete_blog(conn=conn, id=id)
+    
+    blog = blog_svc.get_blog_by_id(conn=conn, id=id)
+    blog_svc.delete_blog(conn=conn, id=id, image_loc=blog.image_loc)
+    return JSONResponse(content = "메시지가 삭제되었습니다.", status_code=status.HTTP_200_OK)
     # return RedirectResponse("/blogs", status_code=status.HTTP_302_FOUND)        
      
