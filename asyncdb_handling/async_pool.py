@@ -9,7 +9,7 @@ async def execute_sleep_query():
         query = "select sleep(5)"
         stmt = text(query)
         result = await conn.execute(stmt)
-        await conn.close()
+        await conn.close()  # Connection Pool로 return > connection id 변경 X
     await engine.dispose()
 
 async def main():

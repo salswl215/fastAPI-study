@@ -24,7 +24,7 @@ def get_database_url():
 DATABASE_CONN = get_database_url()
 print("database_conn:", DATABASE_CONN)
 
-engine: AsyncEngine= create_async_engine(DATABASE_CONN, echo=True,
+engine: AsyncEngine= create_async_engine(DATABASE_CONN, #echo=True,
                        #poolclass=NullPool, # Connection Pool 사용하지 않음. 
                        pool_size=10, max_overflow=0,
                        pool_recycle=300)
@@ -37,20 +37,20 @@ async def direct_get_conn():
     except SQLAlchemyError as e:
         print(e)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detial = "요청하신 서비스가 잠시 내부적으로 문제가 발생하였습니다.")
+                            detail = "요청하신 서비스가 잠시 내부적으로 문제가 발생하였습니다.")
     
 
-def context_get_conn():
+async def context_get_conn():
     conn = None
     try:
-        conn = engine.connect()
+        conn = await engine.connect()
         yield conn
     except SQLAlchemyError as e:
         print(e)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detial = "요청하신 서비스가 잠시 내부적으로 문제가 발생하였습니다.")
+                            detail = "요청하신 서비스가 잠시 내부적으로 문제가 발생하였습니다.")
 
     finally:
         if conn:
-            conn.close()
+            await conn.close()
 
