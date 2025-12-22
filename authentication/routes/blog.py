@@ -10,6 +10,8 @@ from services import blog_svc
 from utils import util
 # from main import templates
 
+
+
 # router 생성
 router = APIRouter(prefix="/blogs", tags=["blogs"])
 # jinja2 Template 엔진 생성
