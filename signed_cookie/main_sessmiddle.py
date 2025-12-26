@@ -12,6 +12,7 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SessionMiddleware 등록
+# max_age = None으로 두면 Session Cookie가 됨 >> 브라우저에 따라 쿠키 동작
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=3600)
 
 # 테스트용 User를 Dict로 생성. 
