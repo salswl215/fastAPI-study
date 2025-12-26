@@ -62,3 +62,81 @@
 | secure | `true`이면 HTTPS 접속 시에만 Cookie가 전송됨. |
 | httponly | `true`이면 JavaScript에서는 cookie에 접근하거나 전송할 수 없도록 함. |
 | samesite | Cookie가 Cross-origin(초기 접속과 다른 Origin) 요청 시 전송될지 여부를 설정함.<br><br>**Strict**: 원 접속과 다른 origin에는 Cookie를 전송하지 않음.<br>**Lax**: 기본적으로 Strict와 같으나, 링크 클릭 등 GET 요청의 경우 전송됨.<br>&nbsp;&nbsp;&nbsp;&nbsp;- iframe, image, JavaScript call로는 전송되지 않음.<br>**None**: 서로 다른 Origin이라도 Cookie 전송됨. |
+
+
+## FastAPI SessionMiddle
+
+### Session
+- Cookie에 모든 정보를 수록하지 않고, 개별 식별 번호 수준의 Session id값만 Cookie에 저장하고, 상세 정보는 서버의 RDB/Memory/Redis등에 저장하는 방식
+- Cookie는 개별 식별 번호만 가지므로 브라우저에서 민감 정보를 가지고 있지 않으므로 보다 안정성있는 민감 정보 관리 가능
+
+```md
+Client                Server                 DB
+  |                     |                     |
+  |---- HTTP Request -->|                     |
+  |                     |-- Session 생성 -->   |
+  |<-- Response + Cookie|                     |
+  |                     |                     |
+  |-- Request + Cookie->|-- Retrieve -------> |
+  |                     |<------ Data ------- |
+  |<-- Response --------|                     |
+  ```
+
+
+### Cookie/Session 비교
+
+| 항목 | Cookie | Session |
+|----|--------|---------|
+| 보안 안정성 | 브라우저의 Cookie 내에 상세 정보를 가지고 있으므로 민감 정보 유출이나 악성 공격에 더 취약함 | Cookie 내에는 `session_id` 값만 가지고 있으므로 상대적으로 보안 안정성이 높음 |
+| 정보 용량 및 성능 | 데이터가 많아질수록 브라우저와 서버 간 전송되는 데이터 양이 증가하여 네트워크 부담이 커짐 | `session_id`만 전송되므로 네트워크 전송 부하는 작음.<br>단, 데이터가 커질수록 서버 메모리 사용량 부담이 증가함 |
+| 보안 및 데이터 통제 | 데이터 삭제/추가의 주체가 브라우저(Client)임.<br>보안 침해 발생 시 서버에서 Cookie 데이터를 일괄 삭제하기 어려움 | 보안 침해가 우려될 경우 Session 저장소를 재시작하거나 모든 Session ID를 invalidate 하여 보안 및 데이터 통제가 가능함 |
+| 웹 프레임워크 사용 편의성 | 인코딩/디코딩, Serialization 등이 상대적으로 불편함 | 서버 측 데이터 저장소와의 연계가 용이하며 인코딩/디코딩, Serialization 처리가 상대적으로 쉬움 |
+
+
+
+### FastAPI SessionMiddle
+- FastAPI는 SessionMiddleware Class를 Middleware로 제공 (이름은 Session을 표방하고 있지만, 실제로는 Signed Cookie)
+- SessionMiddleware를 Middleware로 FastAPI에 등록하면 FastAPI에서 request.session 객체 변수를 사용할 수 있으
+며, request.session은 Python Dictionary 기반으로 데이터를 저장함
+- FastAPI는 브라우저로 Response를 내려 줄때 `request.session`의 Dict 값을 JSON 문자열 형태로 변경한 뒤 이를 다
+시 Signed Key로 Encoding하여 전송함
+- Browser에서 다시 서버로 전송되는 Cookie값을 FastAPI가 request.session으로 읽어들일 때는 Signed Key로
+Encoding된 Cookie값을 다시 Decoding한 뒤 JSON값을 Dict형태로 로딩함(Sign 시 사용한 Key로 데이터가 변경되었는지 검증)
+
+
+### SessionMiddle 동작
+```md
+Client                FastAPI
+  |                     |
+  |---- HTTP Request -->|  (Login)
+  |                     |
+  |<-- Response + ------|
+  |    Signed Cookie    |
+  |                     |
+  |-- Request + ------>|
+  |   Signed Cookie     |
+  |                     |
+  |<-- Response + ------|
+  |    Signed Cookie    |
+  |                     |
+
+```
+
+
+1. `app.add_middleware(SessionMiddleware)`
+- SessionMiddleware는 Starlette 미들웨어이며 FastAPI에서 그대로 사용됨.
+- 모든 HTTP Request에 대해 다음을 수행함:
+    - 요청에 포함된 Cookie 중 session 키를 탐색
+    - 존재할 경우, 서명(Signature) 검증 및 디코딩 수행
+    - 검증이 성공하면 request.session 객체(dict)로 로딩
+- Request객체에 session이라는 내부 dict를 access 할 수 있음
+
+2. Request.session에 정보 담음
+- Request.session[“session_user”] = {“id”: 1, “email”: gildong@gmail.com”}
+
+3. 브라우저로 Response 전송
+- Request.session에 있는 값을 Json으로 Serialization. Cookie Key는 session으로 Value는 json 값을 Signature Key 방식으로 변환하여 전송
+
+4. 브라우저에서 읽어 들이기
+- 브라우저에서 Cookie Key Session을 읽어 들이되 Signature Key로 기반으로 Decoding
+- 변형되지 않은 Cookie임이 확인 되면 request.session 객체로 해당 json 문자열을 Dictionary로 로딩함
